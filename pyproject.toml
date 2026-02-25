@@ -1,0 +1,62 @@
+[project]
+name = "fastapi-template-vertical-slices"
+version = "0.1.0"
+description = "Template for building medium-sized monoliths powered by FastAPI"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "alembic>=1.18.3,<2.0.0",
+    "asyncpg>=0.31.0,<0.32.0",
+    "fastapi[standard]>=0.128.4,<0.129.0",
+    "psycopg[binary]>=3.3.2,<4.0.0",
+    "pwdlib[argon2]>=0.3.0,<0.4.0",
+    "pydantic>=2.12.5,<3.0.0",
+    "pyjwt>=2.11.0,<3.0.0",
+    "python-dotenv>=1.2.1,<2.0.0",
+    "sqlalchemy>=2.0.46,<3.0.0",
+    "uvicorn>=0.40.0,<0.41.0",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1,<2.0.0",
+    "pre-commit>=4.5.1,<5.0.0",
+    "pytest>=9.0.2,<10.0.0",
+    "pytest-cov>=7.0.0,<8.0.0",
+    "radon>=6.0.1,<7.0.0",
+    "ruff>=0.15.0,<0.16.0",
+    "sqlalchemy[mypy]>=2.0.46,<3.0.0",
+    "types-requests>=2.32.4.20260107,<3.0.0.0",
+]
+
+[tool.ruff]
+line-length = 81
+
+[tool.ruff.lint]
+# Available Rules: https://docs.astral.sh/ruff/rules/
+select = [
+    "I",      # isort - import sorting
+    "F",      # Pyflakes - unused imports and undefined names
+    "E",      # pycodestyle errors - whitespace, indentation, syntax
+    "W",      # pycodestyle warnings - style warnings
+    "N",      # pep8-naming - naming conventions (functions, classes, variables)
+    "S",      # flake8-bandit - security issues (SQL injection, hardcoded secrets)
+    "B",      # flake8-bugbear - common bugs (mutable defaults, unreachable code)
+    "BLE",    # blind except
+    "UP",     # pyupgrade - suggests modern Python syntax
+    "ARG",    # flake8-unused-arguments - unused function arguments
+    "ASYNC",  # flake8-async - async/await anti-patterns (important for FastAPI)
+    "PIE",    # flake8-pie - simplifications and best practices
+    "RUF",    # Ruff-specific rules - modern best practices
+]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/**" = ["B008"] # Function calls in default function arguments
+"backend/**/__init__.py" = ["F401"] # Unused imports
+"backend/tests/**" = ["S101"] # Use of assert detected
+
+[tool.mypy]
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+addopts = "--cov=backend"

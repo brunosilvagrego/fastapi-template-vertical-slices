@@ -1,0 +1,10 @@
+services:
+  api:
+    user: ""
+    build:
+      args:
+        REQUIREMENTS: requirements-dev.txt
+    restart: "no"
+    environment:
+      - ENVIRONMENT=testing
+      - DB_VOLUME=app-db-test
