@@ -4,7 +4,7 @@ import pytest
 from fastapi import status
 from httpx import AsyncClient
 
-API_HEALTH_ENDPOINT = "/api/health"
+API_HEALTH_ENDPOINT = "/health"
 
 
 @pytest.mark.anyio
@@ -22,7 +22,7 @@ async def test_health_status(client: AsyncClient) -> None:
         (True, status.HTTP_204_NO_CONTENT),
     ],
 )
-@patch("app.api.health.db_health_check", new_callable=AsyncMock)
+@patch("app.health.router.db_health_check", new_callable=AsyncMock)
 async def test_health_status_mocked(
     mock_db_health_check: AsyncMock,
     client: AsyncClient,

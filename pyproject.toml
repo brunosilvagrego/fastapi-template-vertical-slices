@@ -52,7 +52,7 @@ select = [
 
 [tool.ruff.lint.per-file-ignores]
 "backend/**" = ["B008"] # Function calls in default function arguments
-"backend/**/__init__.py" = ["F401"] # Unused imports
+"backend/migrations/env.py" = ["F401"] # Unused imports
 "backend/tests/**" = ["S101"] # Use of assert detected
 
 [tool.mypy]

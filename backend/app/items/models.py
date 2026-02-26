@@ -1,8 +1,8 @@
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base
-from app.schemas.items import ItemSchema
+from app.core.models import Base
+from app.items.schemas import ItemSchema
 
 
 class Item(Base):

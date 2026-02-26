@@ -2,12 +2,12 @@ import asyncio
 import logging
 import os
 
+from app.clients import service as service_clients
 from app.core.config import settings
 from app.core.consts import Environment
 from app.core.database import SessionManager
 from app.core.logging_config import setup_logging
 from app.core.security import get_password_hash
-from app.services import clients as service_clients
 
 setup_logging()
 logger = logging.getLogger(__name__)

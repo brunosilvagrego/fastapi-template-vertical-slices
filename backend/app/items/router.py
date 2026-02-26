@@ -1,19 +1,19 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import (
+from app.clients.models import Client
+from app.core.deps import (
     get_current_client,
     get_db_session,
     get_item_by_id,
 )
-from app.models.clients import Client
-from app.models.items import Item
-from app.schemas.items import (
+from app.items import service as service_items
+from app.items.models import Item
+from app.items.schemas import (
     ItemCreate,
     ItemSchema,
     ItemUpdate,
 )
-from app.services import items as service_items
 
 router = APIRouter(
     prefix="/items",

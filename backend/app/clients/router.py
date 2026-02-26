@@ -1,21 +1,21 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import (
-    get_client_by_id,
-    get_current_admin_client,
-    get_db_session,
-)
-from app.core.security import new_client_credentials
-from app.models.clients import Client
-from app.schemas.clients import (
+from app.clients import service as service_clients
+from app.clients.models import Client
+from app.clients.schemas import (
     ClientCreate,
     ClientCreateResponse,
     ClientSchema,
     ClientUpdate,
     ClientUpdateResponse,
 )
-from app.services import clients as service_clients
+from app.core.deps import (
+    get_client_by_id,
+    get_current_admin_client,
+    get_db_session,
+)
+from app.core.security import new_client_credentials
 
 router = APIRouter(
     prefix="/clients",

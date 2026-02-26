@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from app.schemas.base import BaseModel
+from app.core.schemas import BaseModel
 
 
 class ClientSchema(BaseModel):

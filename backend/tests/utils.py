@@ -1,6 +1,8 @@
 from fastapi import status
 from httpx import AsyncClient
 
+API_AUTH_ENDPOINT = "/api/v1/auth/token"
+
 
 def get_auth_request_data(client_id: str, client_secret: str) -> dict[str, str]:
     return {
@@ -16,7 +18,7 @@ async def get_client_token(
     client_secret: str,
 ) -> str:
     response = await client.post(
-        "/api/auth/token",
+        API_AUTH_ENDPOINT,
         data=get_auth_request_data(client_id, client_secret),
     )
     assert response.status_code == status.HTTP_200_OK

@@ -3,8 +3,10 @@ from datetime import datetime
 from sqlalchemy import DateTime
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base
-from app.schemas.clients import ClientSchema
+from app.clients.schemas import ClientSchema
+from app.core.models import Base
+
+# TODO: rename module and models to users / User
 
 
 class Client(Base):

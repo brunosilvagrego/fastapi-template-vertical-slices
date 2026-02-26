@@ -11,10 +11,10 @@ from pwdlib import PasswordHash
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.status import HTTP_401_UNAUTHORIZED
 
+from app.clients import service as service_clients
+from app.clients.models import Client
 from app.core import utils
 from app.core.config import settings
-from app.models import Client
-from app.services import clients as service_clients
 
 
 class Oauth2ClientCredentials(OAuth2):

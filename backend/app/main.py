@@ -1,11 +1,13 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 
-from app.api import router
-from app.api.home import router as home_router
+from app.auth.router import router as router_auth
+from app.clients.router import router as router_clients
 from app.core.logging_config import setup_logging
+from app.health.router import router as router_health
+from app.items.router import router as router_items
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -25,5 +27,24 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="<Service Name> API", lifespan=lifespan)
 
-app.include_router(home_router)
+router = APIRouter()
+
+
+@router.get("/")
+def root():
+    logger.info("Serving root endpoint.")
+    return {"message": "Hello World"}
+
+
+# Root routers
+router.include_router(router_health)
+
+# API routers
+api_router = APIRouter(prefix="/api/v1")
+api_router.include_router(router_auth)
+api_router.include_router(router_clients)
+api_router.include_router(router_items)
+
+# App routers
 app.include_router(router)
+app.include_router(api_router)

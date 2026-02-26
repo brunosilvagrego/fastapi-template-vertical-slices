@@ -1,7 +1,7 @@
 import pytest
-from app.api.deps import get_db_session
 from app.core.config import settings
 from app.core.database import SessionManager, engine
+from app.core.deps import get_db_session
 from app.main import app
 from httpx import ASGITransport, AsyncClient
 

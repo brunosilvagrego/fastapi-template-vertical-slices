@@ -1,4 +1,4 @@
-from app.schemas.base import BaseModel
+from app.core.schemas import BaseModel
 
 
 class Token(BaseModel):

@@ -3,8 +3,8 @@ from collections.abc import Sequence
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.clients.models import Client
 from app.core import utils
-from app.models import Client
 
 
 async def create(

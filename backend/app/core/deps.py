@@ -6,14 +6,14 @@ from jwt.exceptions import ExpiredSignatureError, PyJWTError
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.schemas import TokenData
+from app.clients import service as service_clients
+from app.clients.models import Client
 from app.core.config import settings
 from app.core.database import SessionManager
 from app.core.security import oauth2_scheme
-from app.models.clients import Client
-from app.models.items import Item
-from app.schemas.token import TokenData
-from app.services import clients as service_clients
-from app.services import items as service_items
+from app.items import service as service_items
+from app.items.models import Item
 
 logger = logging.getLogger(__name__)
 

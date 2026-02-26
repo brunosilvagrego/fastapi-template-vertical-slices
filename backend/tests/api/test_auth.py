@@ -4,9 +4,7 @@ from app.core.config import settings
 from fastapi import status
 from httpx import AsyncClient
 
-from tests.utils import get_auth_request_data
-
-API_AUTH_ENDPOINT = "/api/auth/token"
+from tests.utils import API_AUTH_ENDPOINT, get_auth_request_data
 
 
 @pytest.mark.anyio
