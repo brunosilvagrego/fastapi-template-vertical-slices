@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated, Self
 
-from pydantic import EmailStr, Field, model_validator
+from pydantic import ConfigDict, EmailStr, Field, model_validator
 
 from app.core.consts import PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH
 from app.core.schemas import BaseModel
@@ -22,6 +22,8 @@ class UserSchema(BaseModel):
 
 
 class UserCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     full_name: str
     email: EmailStr
     password: PasswordField
@@ -35,26 +37,39 @@ class UserRead(BaseModel):
 
 
 class UserUpdateAdmin(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     email: EmailStr | None = None
+    password: PasswordField | None = None
     is_admin: bool | None = None
 
     @model_validator(mode="after")
     def at_least_one_field(self) -> Self:
-        if self.email is None and self.is_admin is None:
+        if all(
+            param is None
+            for param in (
+                self.email,
+                self.password,
+                self.is_admin,
+            )
+        ):
             raise ValueError(
-                "At least one of 'email' or 'is_admin'must be provided."
+                "At least one of 'email', 'password' or 'is_admin' must be "
+                "provided."
             )
         return self
 
 
 class UserUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     full_name: str | None = None
     password: PasswordField | None = None
 
     @model_validator(mode="after")
     def at_least_one_field(self) -> Self:
-        if self.full_name is None and self.password is None:
+        if all(param is None for param in (self.full_name, self.password)):
             raise ValueError(
-                "At least one of 'full_name' or 'password'must be provided."
+                "At least one of 'full_name' or 'password' must be provided."
             )
         return self

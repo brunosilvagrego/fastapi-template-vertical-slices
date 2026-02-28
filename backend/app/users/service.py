@@ -68,29 +68,24 @@ async def update(
     hashed_password: str | None = None,
     is_admin: bool | None = None,
 ) -> User:
-    if all(
-        param is None
-        for param in (
-            email,
-            full_name,
-            hashed_password,
-            is_admin,
-        )
-    ):
+    updates = {
+        "email": email,
+        "full_name": full_name,
+        "hashed_password": hashed_password,
+        "is_admin": is_admin,
+    }
+
+    provided = {
+        attribute: value
+        for attribute, value in updates.items()
+        if value is not None
+    }
+
+    if not provided:
         return user
 
-    # TODO: improve
-    if email:
-        user.email = email
-
-    if full_name:
-        user.full_name = full_name
-
-    if hashed_password:
-        user.hashed_password = hashed_password
-
-    if is_admin:
-        user.is_admin = is_admin
+    for attribute, value in provided.items():
+        setattr(user, attribute, value)
 
     await db_session.commit()
     await db_session.refresh(user)

@@ -52,7 +52,6 @@ async def admin_create_user(
 
 @router_admin.get("", response_model=list[UserSchema])
 async def admin_list_users(
-    # TODO: add email query param
     db_session: AsyncSession = Depends(get_db_session),
 ) -> list[UserSchema]:
     users = await service_users.get_all(db_session)
@@ -73,10 +72,17 @@ async def admin_update_user(
     user: User = Depends(get_user_by_uid),
     db_session: AsyncSession = Depends(get_db_session),
 ) -> UserSchema:
+    hashed_password = (
+        get_password_hash(user_update.password)
+        if user_update.password is not None
+        else None
+    )
+
     user = await service_users.update(
         db_session=db_session,
         user=user,
         email=user_update.email,
+        hashed_password=hashed_password,
         is_admin=user_update.is_admin,
     )
 

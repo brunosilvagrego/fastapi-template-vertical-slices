@@ -1,6 +1,13 @@
-from app.core.consts import API_AUTH_ENDPOINT
+import random
+import string
+from datetime import datetime
+
+from app.core.consts import API_AUTH_ENDPOINT, PASSWORD_MIN_LENGTH
+from app.core.security import decode_access_token
 from fastapi import status
 from httpx import AsyncClient
+
+PASSWORD_CHARACTERS = string.ascii_letters + string.digits
 
 
 def get_auth_request_data(email: str, password: str) -> dict[str, str]:
@@ -11,12 +18,21 @@ def get_auth_request_data(email: str, password: str) -> dict[str, str]:
     }
 
 
-async def get_user_token(client: AsyncClient, email: str, password: str) -> str:
+async def get_user_token(
+    client: AsyncClient,
+    email: str,
+    password: str,
+    expected_status: status = status.HTTP_200_OK,
+) -> str | None:
     response = await client.post(
         API_AUTH_ENDPOINT,
         data=get_auth_request_data(email, password),
     )
-    assert response.status_code == status.HTTP_200_OK
+    assert response.status_code == expected_status
+
+    if expected_status != status.HTTP_200_OK:
+        return None
+
     return response.json()["access_token"]
 
 
@@ -30,5 +46,37 @@ async def make_authenticated_client(
     password: str,
 ) -> AsyncClient:
     token = await get_user_token(client, email, password)
+    assert token is not None
     client.headers.update(get_auth_header(token))
     return client
+
+
+def random_password(
+    length: int = PASSWORD_MIN_LENGTH,
+    alphabet: str = PASSWORD_CHARACTERS,
+):
+    return "".join(random.choice(alphabet) for _ in range(length))  # noqa: S311
+
+
+async def validate_user_password(
+    client: AsyncClient,
+    uid: str,
+    email: str,
+    password: str,
+    expected_status: status = status.HTTP_200_OK,
+) -> None:
+    token = await get_user_token(client, email, password, expected_status)
+
+    if expected_status != status.HTTP_200_OK:
+        return
+
+    token_data = decode_access_token(token)
+    assert token_data.uid == uid
+
+
+def is_iso_datetime(value: str) -> bool:
+    try:
+        datetime.fromisoformat(value)
+        return True
+    except ValueError:
+        return False

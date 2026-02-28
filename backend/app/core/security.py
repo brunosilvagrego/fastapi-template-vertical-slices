@@ -6,6 +6,7 @@ from fastapi.security import OAuth2PasswordBearer
 from pwdlib import PasswordHash
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.schemas import TokenData
 from app.core import utils
 from app.core.config import settings
 from app.core.consts import API_AUTH_ENDPOINT
@@ -60,3 +61,13 @@ def create_access_token(data: dict) -> str:
     )
 
     return encoded_jwt
+
+
+def decode_access_token(token: str) -> TokenData:
+    payload = jwt.decode(
+        jwt=token,
+        key=settings.JWT_SECRET,
+        algorithms=[settings.JWT_ALGORITHM],
+    )
+
+    return TokenData(uid=payload.get("sub"))

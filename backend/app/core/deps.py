@@ -1,15 +1,13 @@
 import logging
 
-import jwt
 from fastapi import Depends, HTTPException, status
 from jwt.exceptions import ExpiredSignatureError, PyJWTError
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.schemas import TokenData
-from app.core.config import settings
 from app.core.database import SessionManager
-from app.core.security import oauth2_scheme
+from app.core.security import decode_access_token, oauth2_scheme
 from app.items import service as service_items
 from app.items.models import Item
 from app.users import service as service_users
@@ -48,12 +46,7 @@ def check_user(user: User | None) -> User:
 
 def get_token_data(token: str = Depends(oauth2_scheme)) -> TokenData:
     try:
-        payload = jwt.decode(
-            jwt=token,
-            key=settings.JWT_SECRET,
-            algorithms=[settings.JWT_ALGORITHM],
-        )
-        token_data = TokenData(uid=payload.get("sub"))
+        token_data = decode_access_token(token)
     except ExpiredSignatureError:
         raise_unauthorized(EXPIRED_JWT)
     except (PyJWTError, ValidationError) as e:
