@@ -55,21 +55,23 @@ async def client(client_factory):
 
 @pytest.fixture
 async def admin_client(client_factory):
+    """Async client with admin user authentication"""
     async with await client_factory() as client:
         authenticated_client = await make_authenticated_client(
             client=client,
-            client_id=settings.ADMIN_CLIENT_ID,
-            client_secret=settings.ADMIN_CLIENT_SECRET,
+            email=settings.ADMIN_USER_EMAIL,
+            password=settings.ADMIN_USER_PASSWORD,
         )
         yield authenticated_client
 
 
 @pytest.fixture
 async def external_client(client_factory):
+    """Async client with external user authentication"""
     async with await client_factory() as client:
         authenticated_client = await make_authenticated_client(
             client=client,
-            client_id=settings.EXTERNAL_CLIENT_ID,
-            client_secret=settings.EXTERNAL_CLIENT_SECRET,
+            email=settings.EXTERNAL_USER_EMAIL,
+            password=settings.EXTERNAL_USER_PASSWORD,
         )
         yield authenticated_client

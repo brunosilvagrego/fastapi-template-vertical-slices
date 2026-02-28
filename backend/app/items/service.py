@@ -10,9 +10,9 @@ async def create(
     db_session: AsyncSession,
     title: str,
     description: str,
-    owner_id: int,
+    owner_uid: str,
 ) -> Item:
-    item = Item(title=title, description=description, owner_id=owner_id)
+    item = Item(title=title, description=description, owner_uid=owner_uid)
 
     db_session.add(item)
     await db_session.commit()
@@ -21,15 +21,15 @@ async def create(
     return item
 
 
-async def get(db_session: AsyncSession, id: int, owner_id: int) -> Item | None:
-    stmt = select(Item).where(Item.id == id, Item.owner_id == owner_id)
+async def get(db_session: AsyncSession, id: int, owner_uid: str) -> Item | None:
+    stmt = select(Item).where(Item.id == id, Item.owner_uid == owner_uid)
     result = await db_session.execute(stmt)
 
     return result.scalar_one_or_none()
 
 
-async def get_all(db_session: AsyncSession, owner_id: int) -> Sequence[Item]:
-    stmt = select(Item).where(Item.owner_id == owner_id)
+async def get_all(db_session: AsyncSession, owner_uid: str) -> Sequence[Item]:
+    stmt = select(Item).where(Item.owner_uid == owner_uid)
     result = await db_session.execute(stmt)
 
     return result.scalars().all()

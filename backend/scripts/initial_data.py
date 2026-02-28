@@ -2,12 +2,12 @@ import asyncio
 import logging
 import os
 
-from app.clients import service as service_clients
 from app.core.config import settings
 from app.core.consts import Environment
 from app.core.database import SessionManager
 from app.core.logging_config import setup_logging
 from app.core.security import get_password_hash
+from app.users import service as service_users
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -18,34 +18,32 @@ async def create_users():
     logger.info(f"Running initial data script for environment: {env}")
 
     async with SessionManager() as db_session:
-        clients = await service_clients.get_all(db_session)
+        users = await service_users.get_all(db_session)
 
-        if clients:
-            logger.info(
-                "Clients already exist. Skipping initial clients creation."
-            )
+        if users:
+            logger.info("Users already exist. Skipping initial users creation.")
             return
 
-        await service_clients.create(
+        await service_users.create(
             db_session=db_session,
-            name=settings.ADMIN_CLIENT_NAME,
-            oauth_id=settings.ADMIN_CLIENT_ID,
-            oauth_secret_hash=get_password_hash(settings.ADMIN_CLIENT_SECRET),
+            full_name=settings.ADMIN_USER_FULL_NAME,
+            email=settings.ADMIN_USER_EMAIL,
+            hashed_password=get_password_hash(settings.ADMIN_USER_PASSWORD),
             is_admin=True,
         )
-        logger.info("Admin client created.")
+        logger.info("Admin user created.")
 
         if env in (Environment.DEVELOPMENT, Environment.TESTING):
-            await service_clients.create(
+            await service_users.create(
                 db_session=db_session,
-                name=settings.EXTERNAL_CLIENT_NAME,
-                oauth_id=settings.EXTERNAL_CLIENT_ID,
-                oauth_secret_hash=get_password_hash(
-                    settings.EXTERNAL_CLIENT_SECRET
+                full_name=settings.EXTERNAL_USER_FULL_NAME,
+                email=settings.EXTERNAL_USER_EMAIL,
+                hashed_password=get_password_hash(
+                    settings.EXTERNAL_USER_PASSWORD
                 ),
                 is_admin=False,
             )
-            logger.info("External client created.")
+            logger.info("External user created.")
 
 
 if __name__ == "__main__":

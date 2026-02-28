@@ -16,13 +16,13 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     # Default users
-    ADMIN_CLIENT_NAME: str = "Admin"
-    ADMIN_CLIENT_ID: str
-    ADMIN_CLIENT_SECRET: str
+    ADMIN_USER_FULL_NAME: str = "Admin"
+    ADMIN_USER_EMAIL: str = "admin@example.com"
+    ADMIN_USER_PASSWORD: str
 
-    EXTERNAL_CLIENT_NAME: str = "Service A"
-    EXTERNAL_CLIENT_ID: str
-    EXTERNAL_CLIENT_SECRET: str
+    EXTERNAL_USER_FULL_NAME: str = "John Smith"
+    EXTERNAL_USER_EMAIL: str = "jsmith@example.com"
+    EXTERNAL_USER_PASSWORD: str
 
 
 settings = Settings()

@@ -1,9 +1,8 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.clients.models import Client
 from app.core.deps import (
-    get_current_client,
+    get_current_user,
     get_db_session,
     get_item_by_id,
 )
@@ -14,11 +13,12 @@ from app.items.schemas import (
     ItemSchema,
     ItemUpdate,
 )
+from app.users.models import User
 
 router = APIRouter(
     prefix="/items",
     tags=["Items"],
-    dependencies=[Depends(get_current_client)],
+    dependencies=[Depends(get_current_user)],
 )
 
 
@@ -29,14 +29,14 @@ router = APIRouter(
 )
 async def create_item(
     item_create: ItemCreate,
-    client: Client = Depends(get_current_client),
+    user: User = Depends(get_current_user),
     db_session: AsyncSession = Depends(get_db_session),
 ) -> ItemSchema:
     item = await service_items.create(
         db_session=db_session,
         title=item_create.title,
         description=item_create.description,
-        owner_id=client.id,
+        owner_uid=user.uid,
     )
 
     return item.schema()
@@ -44,12 +44,12 @@ async def create_item(
 
 @router.get("", response_model=list[ItemSchema])
 async def list_items(
-    client: Client = Depends(get_current_client),
+    user: User = Depends(get_current_user),
     db_session: AsyncSession = Depends(get_db_session),
 ) -> list[ItemSchema]:
     items = await service_items.get_all(
         db_session=db_session,
-        owner_id=client.id,
+        owner_uid=user.uid,
     )
 
     return [item.schema() for item in items]

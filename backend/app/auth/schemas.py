@@ -7,4 +7,4 @@ class Token(BaseModel):
 
 
 class TokenData(BaseModel):
-    client_id: str | None = None
+    uid: str | None = None

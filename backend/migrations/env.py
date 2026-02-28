@@ -1,12 +1,12 @@
 from logging.config import fileConfig
 
 from alembic import context
-from app.clients import models as models_clients
 from app.core.database import DatabaseDriver, get_database_url
 
 # Import all models to ensure they are registered with SQLAlchemy
 from app.core.models import Base
 from app.items import models as models_items
+from app.users import models as models_users
 from sqlalchemy import create_engine
 
 # this is the Alembic Config object, which provides

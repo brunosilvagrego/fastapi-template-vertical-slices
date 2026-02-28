@@ -7,6 +7,8 @@ API_ITEM_ID_ENDPOINT = "/api/v1/items/{id}"
 DEFAULT_DESCRIPTION = "My item"
 NONEXISTENT_ITEM_ID = 9999
 
+# TODO: test credentials
+
 
 async def create_new_item(
     client: AsyncClient,

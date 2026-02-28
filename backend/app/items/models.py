@@ -11,7 +11,7 @@ class Item(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True, unique=True)
     title: Mapped[str]
     description: Mapped[str]
-    owner_id: Mapped[int] = mapped_column(ForeignKey("client.id"))
+    owner_uid: Mapped[str] = mapped_column(ForeignKey("users.uid"))
 
     def schema(self) -> ItemSchema:
         return ItemSchema(

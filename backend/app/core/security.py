@@ -1,76 +1,18 @@
-import secrets
 from copy import deepcopy
 from datetime import timedelta
 
 import jwt
-from fastapi import Form, HTTPException, Request
-from fastapi.openapi.models import OAuthFlowClientCredentials, OAuthFlows
-from fastapi.security import OAuth2
-from fastapi.security.utils import get_authorization_scheme_param
+from fastapi.security import OAuth2PasswordBearer
 from pwdlib import PasswordHash
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.status import HTTP_401_UNAUTHORIZED
 
-from app.clients import service as service_clients
-from app.clients.models import Client
 from app.core import utils
 from app.core.config import settings
+from app.core.consts import API_AUTH_ENDPOINT
+from app.users import service as service_users
+from app.users.models import User
 
-
-class Oauth2ClientCredentials(OAuth2):
-    """Based on: https://github.com/fastapi/fastapi/discussions/7846"""
-
-    def __init__(
-        self,
-        tokenUrl: str,  # noqa: N803
-        scheme_name: str | None = None,
-        scopes: dict | None = None,
-        auto_error: bool = True,
-    ):
-        if not scopes:
-            scopes = {}
-        flows = OAuthFlows(
-            clientCredentials=OAuthFlowClientCredentials(
-                tokenUrl=tokenUrl,
-                scopes=scopes,
-            )
-        )
-        super().__init__(
-            flows=flows, scheme_name=scheme_name, auto_error=auto_error
-        )
-
-    async def __call__(self, request: Request) -> str | None:
-        authorization: str | None = request.headers.get("Authorization")
-        scheme, param = get_authorization_scheme_param(authorization)
-        if not authorization or scheme.lower() != settings.JWT_TOKEN_TYPE:
-            if self.auto_error:
-                raise HTTPException(
-                    status_code=HTTP_401_UNAUTHORIZED,
-                    detail="Not authenticated",
-                    headers={
-                        "WWW-Authenticate": settings.JWT_TOKEN_TYPE.title()
-                    },
-                )
-            else:
-                return None
-        return param
-
-
-class OAuth2ClientCredentialsRequestForm:
-    def __init__(
-        self,
-        grant_type: str = Form(None, pattern="client_credentials"),
-        scope: str = Form(""),
-        client_id: str | None = Form(None),
-        client_secret: str | None = Form(None),
-    ):
-        self.grant_type = grant_type
-        self.scopes = scope.split()
-        self.client_id = client_id
-        self.client_secret = client_secret
-
-
-oauth2_scheme = Oauth2ClientCredentials(tokenUrl="/api/auth/token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl=API_AUTH_ENDPOINT)
 
 password_hash = PasswordHash.recommended()
 
@@ -83,33 +25,23 @@ def get_password_hash(password: str) -> str:
     return password_hash.hash(password)
 
 
-def generate_oauth_client_credentials() -> tuple[str, str]:
-    return (secrets.token_urlsafe(16), secrets.token_urlsafe(32))
-
-
-def new_client_credentials() -> tuple[str, str, str]:
-    client_id, client_secret = generate_oauth_client_credentials()
-    client_secret_hash = get_password_hash(client_secret)
-    return client_id, client_secret, client_secret_hash
-
-
-async def authenticate_client(
+async def authenticate_user(
     db_session: AsyncSession,
-    client_id: str | None,
-    client_secret: str | None,
-) -> Client | None:
-    if client_id is None or client_secret is None:
+    email: str | None,
+    password: str | None,
+) -> User | None:
+    if email is None or password is None:
         return None
 
-    client = await service_clients.get_by_oauth_id(db_session, client_id)
+    user = await service_users.get_by_email(db_session, email)
 
-    if client is None:
+    if user is None:
         return None
 
-    if not verify_password(client_secret, client.oauth_secret_hash):
+    if not verify_password(password, user.hashed_password):
         return None
 
-    return client
+    return user
 
 
 def create_access_token(data: dict) -> str:

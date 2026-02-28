@@ -7,13 +7,13 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.schemas import TokenData
-from app.clients import service as service_clients
-from app.clients.models import Client
 from app.core.config import settings
 from app.core.database import SessionManager
 from app.core.security import oauth2_scheme
 from app.items import service as service_items
 from app.items.models import Item
+from app.users import service as service_users
+from app.users.models import User
 
 logger = logging.getLogger(__name__)
 
@@ -30,20 +30,20 @@ def raise_unauthorized(detail: str):
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
 
 
-def check_client(client: Client | None) -> Client:
-    if client is None:
+def check_user(user: User | None) -> User:
+    if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Client not found",
+            detail="User not found",
         )
 
-    if not client.is_active:
+    if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Inactive client",
+            detail="Inactive user",
         )
 
-    return client
+    return user
 
 
 def get_token_data(token: str = Depends(oauth2_scheme)) -> TokenData:
@@ -53,7 +53,7 @@ def get_token_data(token: str = Depends(oauth2_scheme)) -> TokenData:
             key=settings.JWT_SECRET,
             algorithms=[settings.JWT_ALGORITHM],
         )
-        token_data = TokenData(client_id=payload.get("sub"))
+        token_data = TokenData(uid=payload.get("sub"))
     except ExpiredSignatureError:
         raise_unauthorized(EXPIRED_JWT)
     except (PyJWTError, ValidationError) as e:
@@ -63,47 +63,45 @@ def get_token_data(token: str = Depends(oauth2_scheme)) -> TokenData:
     return token_data
 
 
-async def get_current_client(
+async def get_current_user(
     token: TokenData = Depends(get_token_data),
     db_session: AsyncSession = Depends(get_db_session),
-) -> Client:
-    if token.client_id is None:
-        logger.warning("Token does not contain client_id")
+) -> User:
+    if token.uid is None:
+        logger.warning("Token does not contain uid")
         raise_unauthorized(INVALID_JWT)
 
-    client = check_client(
-        await service_clients.get_by_oauth_id(db_session, token.client_id)
-    )
+    user = check_user(await service_users.get(db_session, token.uid))
 
-    return client
+    return user
 
 
-async def get_current_admin_client(
-    current_client: Client = Depends(get_current_client),
-) -> Client:
-    if not current_client.is_admin:
+async def get_current_admin(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    if current_user.is_admin is False:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin privileges required",
         )
 
-    return current_client
+    return current_user
 
 
-async def get_client_by_id(
-    id: int,
+async def get_user_by_uid(
+    uid: str,
     db_session: AsyncSession = Depends(get_db_session),
-) -> Client:
-    client = check_client(await service_clients.get(db_session, id))
-    return client
+) -> User:
+    user = check_user(await service_users.get(db_session, uid))
+    return user
 
 
 async def get_item_by_id(
     id: int,
-    client: Client = Depends(get_current_client),
+    user: User = Depends(get_current_user),
     db_session: AsyncSession = Depends(get_db_session),
 ) -> Item:
-    item = await service_items.get(db_session, id, owner_id=client.id)
+    item = await service_items.get(db_session, id, owner_uid=user.uid)
 
     if item is None:
         raise HTTPException(

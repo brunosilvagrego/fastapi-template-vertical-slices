@@ -4,10 +4,11 @@ from contextlib import asynccontextmanager
 from fastapi import APIRouter, FastAPI
 
 from app.auth.router import router as router_auth
-from app.clients.router import router as router_clients
 from app.core.logging_config import setup_logging
 from app.health.router import router as router_health
 from app.items.router import router as router_items
+from app.users.router import router as router_users
+from app.users.router import router_admin as router_users_admin
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -42,7 +43,8 @@ router.include_router(router_health)
 # API routers
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(router_auth)
-api_router.include_router(router_clients)
+api_router.include_router(router_users_admin)
+api_router.include_router(router_users)
 api_router.include_router(router_items)
 
 # App routers

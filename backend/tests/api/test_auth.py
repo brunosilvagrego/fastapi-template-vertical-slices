@@ -1,16 +1,17 @@
 import jwt
 import pytest
 from app.core.config import settings
+from app.core.consts import API_AUTH_ENDPOINT
 from fastapi import status
 from httpx import AsyncClient
 
-from tests.utils import API_AUTH_ENDPOINT, get_auth_request_data
+from tests.utils import get_auth_request_data
 
 
 @pytest.mark.anyio
 async def test_no_credentials(client: AsyncClient) -> None:
     response = await client.post(API_AUTH_ENDPOINT)
-    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 @pytest.mark.anyio
@@ -24,20 +25,20 @@ async def test_invalid_credentials(client: AsyncClient) -> None:
 
 @pytest.mark.anyio
 @pytest.mark.parametrize(
-    "client_id,client_secret",
+    "email,password",
     [
-        (settings.ADMIN_CLIENT_ID, settings.ADMIN_CLIENT_SECRET),
-        (settings.EXTERNAL_CLIENT_ID, settings.EXTERNAL_CLIENT_SECRET),
+        (settings.ADMIN_USER_EMAIL, settings.ADMIN_USER_PASSWORD),
+        (settings.EXTERNAL_USER_EMAIL, settings.EXTERNAL_USER_PASSWORD),
     ],
 )
 async def test_valid_credentials(
     client: AsyncClient,
-    client_id: str,
-    client_secret: str,
+    email: str,
+    password: str,
 ) -> None:
     response = await client.post(
         API_AUTH_ENDPOINT,
-        data=get_auth_request_data(client_id, client_secret),
+        data=get_auth_request_data(email, password),
     )
     assert response.status_code == status.HTTP_200_OK
 
@@ -54,5 +55,5 @@ async def test_valid_credentials(
         key=settings.JWT_SECRET,
         algorithms=[settings.JWT_ALGORITHM],
     )
-    assert payload.get("sub") == client_id
+    assert isinstance(payload.get("sub"), str)
     assert isinstance(payload.get("exp"), int)
