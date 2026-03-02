@@ -2,12 +2,30 @@ import pytest
 from fastapi import status
 from httpx import AsyncClient
 
+from tests.utils import (
+    get_auth_header_expired_token,
+    get_auth_header_invalid_token,
+)
+
 API_ITEMS_ENDPOINT = "/api/v1/items"
 API_ITEM_ID_ENDPOINT = "/api/v1/items/{id}"
 DEFAULT_DESCRIPTION = "My item"
 NONEXISTENT_ITEM_ID = 9999
 
-# TODO: test credentials
+
+async def check_endpoints_access(
+    client: AsyncClient,
+    headers: dict,
+    expected_status: status,
+) -> None:
+    for request_func in [client.post, client.get]:
+        response = await request_func(API_ITEMS_ENDPOINT, headers=headers)
+        assert response.status_code == expected_status
+
+    items_id_url = API_ITEM_ID_ENDPOINT.format(id="test")
+    for request_func in [client.get, client.patch, client.delete]:
+        response = await request_func(items_id_url, headers=headers)
+        assert response.status_code == expected_status
 
 
 async def create_new_item(
@@ -86,6 +104,33 @@ async def delete_item(
 ) -> None:
     response = await client.delete(API_ITEM_ID_ENDPOINT.format(id=item_id))
     assert response.status_code == expected_status
+
+
+@pytest.mark.anyio
+async def test_items_endpoints_no_credentials(client: AsyncClient) -> None:
+    await check_endpoints_access(
+        client,
+        headers={},
+        expected_status=status.HTTP_401_UNAUTHORIZED,
+    )
+
+
+@pytest.mark.anyio
+async def test_items_endpoints_invalid_token(client: AsyncClient) -> None:
+    await check_endpoints_access(
+        client,
+        headers=get_auth_header_invalid_token(),
+        expected_status=status.HTTP_401_UNAUTHORIZED,
+    )
+
+
+@pytest.mark.anyio
+async def test_items_endpoints_expired_token(client: AsyncClient) -> None:
+    await check_endpoints_access(
+        client,
+        headers=get_auth_header_expired_token(),
+        expected_status=status.HTTP_401_UNAUTHORIZED,
+    )
 
 
 @pytest.mark.anyio

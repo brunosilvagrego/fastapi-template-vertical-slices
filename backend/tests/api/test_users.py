@@ -5,6 +5,8 @@ from fastapi import status
 from httpx import AsyncClient
 
 from tests.utils import (
+    get_auth_header_expired_token,
+    get_auth_header_invalid_token,
     is_iso_datetime,
     make_authenticated_client,
     random_password,
@@ -187,7 +189,7 @@ async def delete_user(
 
 
 @pytest.mark.anyio
-async def test_no_credentials(client: AsyncClient) -> None:
+async def test_users_endpoints_no_credentials(client: AsyncClient) -> None:
     for check_access_function in (
         check_admin_endpoints_access,
         check_user_endpoints_access,
@@ -200,23 +202,33 @@ async def test_no_credentials(client: AsyncClient) -> None:
 
 
 @pytest.mark.anyio
-async def test_invalid_token(client: AsyncClient) -> None:
+async def test_users_endpoints_invalid_token(client: AsyncClient) -> None:
     for check_access_function in (
         check_admin_endpoints_access,
         check_user_endpoints_access,
     ):
         await check_access_function(
             client,
-            headers={"Authorization": "Bearer invalid_token"},
+            headers=get_auth_header_invalid_token(),
             expected_status=status.HTTP_401_UNAUTHORIZED,
         )
 
 
-# TODO: test expired token
+@pytest.mark.anyio
+async def test_users_endpoints_expired_token(client: AsyncClient) -> None:
+    for check_access_function in (
+        check_admin_endpoints_access,
+        check_user_endpoints_access,
+    ):
+        await check_access_function(
+            client,
+            headers=get_auth_header_expired_token(),
+            expected_status=status.HTTP_401_UNAUTHORIZED,
+        )
 
 
 @pytest.mark.anyio
-async def test_external_user_access(
+async def test_users_endpoints_external_access(
     external_client: AsyncClient,
 ) -> None:
     await check_admin_endpoints_access(

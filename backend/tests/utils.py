@@ -1,9 +1,12 @@
 import random
 import string
-from datetime import datetime
+from datetime import datetime, timedelta
 
+import jwt
+from app.core.config import settings
 from app.core.consts import API_AUTH_ENDPOINT, PASSWORD_MIN_LENGTH
 from app.core.security import decode_access_token
+from app.core.utils import now_utc
 from fastapi import status
 from httpx import AsyncClient
 
@@ -49,6 +52,25 @@ async def make_authenticated_client(
     assert token is not None
     client.headers.update(get_auth_header(token))
     return client
+
+
+def get_auth_header_invalid_token() -> dict[str, str]:
+    return get_auth_header("invalid_token")
+
+
+def create_access_token(user_uid: str, expire: datetime) -> str:
+    return jwt.encode(
+        payload={"sub": user_uid, "exp": expire},
+        key=settings.JWT_SECRET,
+        algorithm=settings.JWT_ALGORITHM,
+    )
+
+
+def get_auth_header_expired_token() -> dict[str, str]:
+    expire = now_utc() - timedelta(minutes=5)
+    expired_token = create_access_token(user_uid="test", expire=expire)
+
+    return get_auth_header(expired_token)
 
 
 def random_password(
