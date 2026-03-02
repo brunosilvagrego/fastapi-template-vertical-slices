@@ -17,17 +17,90 @@ Python (3.14).
 - 🧰 `Makefile` for common tasks
 - 🔒 Optional `pre-commit` hooks
 
+## Project Structure
+
+The project follows a **Vertical Slice Architecture**. Instead of traditional
+layering (controllers, services, repositories) that splits functionality across
+the entire project, each directory within `backend/app/` represents a specific
+domain feature (a "slice") and contains everything it needs to function.
+
+```text
+.
+├── backend/
+│   ├── app/                       # Main application code
+│   │   ├── auth/                  # Auth slice
+│   │   │   ├── router.py
+│   │   │   └── schemas.py
+│   │   ├── core/                  # Configuration, security, utils
+│   │   │   ├── config.py
+│   │   │   ├── consts.py
+│   │   │   ├── database.py
+│   │   │   ├── deps.py
+│   │   │   ├── logging_config.py
+│   │   │   ├── models.py
+│   │   │   ├── schemas.py
+│   │   │   ├── security.py
+│   │   │   └── utils.py
+│   │   ├── health/                # Health slice
+│   │   │   └── router.py
+│   │   ├── items/                 # Items slice
+│   │   │   ├── models.py
+│   │   │   ├── router.py
+│   │   │   ├── schemas.py
+│   │   │   └── service.py
+│   │   ├── users/                 # Users slice
+│   │   │   ├── models.py
+│   │   │   ├── router.py
+│   │   │   ├── schemas.py
+│   │   │   └── service.py
+│   │   └── main.py
+│   ├── docker/        # Docker files
+│   ├── migrations/    # Alembic migrations
+│   ├── scripts/       # Startup and initialization scripts
+│   └── tests/         # Pytest suite
+├── docker-compose.yaml
+├── docker-compose.test.yaml
+├── Makefile
+└── pyproject.toml
+```
+
 ## Goals
 
-TODO: Mention monolith vs microservices
+The main goal of this template is to provide a clean, modular, and scalable
+foundation for building medium-sized monoliths with FastAPI. 
+
+While microservices are popular, they often introduce premature complexity
+(distributed systems, network latency, operational overhead) that many projects
+don't need initially.
+
+This template promotes a **Modular Monolith** approach using **Vertical Slices**,
+ensuring that the codebase remains organized and features are decoupled. This
+makes it significantly easier to transition specific modules into independent
+microservices later if the need arises.
 
 ### Intentionally not included
 
-TODO
+To keep the template focused and lightweight, the following are not included:
+
+- Frontend
+- Redis / caching
+- Celery / background jobs
+- Identity providers (Auth0, Keycloak, etc.) / social auth
+- Deployment pipelines
 
 ### Authentication
 
-TODO
+This template implements **JWT-based authentication** using FastAPI's
+`OAuth2PasswordBearer`.
+
+- **Token Generation**: Users can obtain an access token by providing their
+email and password at the `/api/v1/auth/token` endpoint.
+
+- **Password Hashing**: Secure password storage is handled by `pwdlib` using
+recommended hashing algorithms.
+
+- **Protection**: Routes can be protected by injecting the current user
+dependency, which validates the JWT and user permissions.
 
 ## Local Development
 
@@ -41,8 +114,8 @@ Install:
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/brunosilvagrego/fastapi-template-microservices.git
-   cd fastapi-template-microservices
+   git clone https://github.com/brunosilvagrego/fastapi-template-vertical-slices.git
+   cd fastapi-template-vertical-slices
    ```
 
 2. **Install dependencies**:
@@ -100,10 +173,6 @@ Update requirements files:
 ```bash
 make requirements-all
 ```
-
-## Project Structure
-
-TODO
 
 ## References
 
