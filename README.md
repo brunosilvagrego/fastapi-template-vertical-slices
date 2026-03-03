@@ -54,10 +54,10 @@ domain feature (a "slice") and contains everything it needs to function.
 │   │   │   ├── schemas.py
 │   │   │   └── service.py
 │   │   └── main.py
-│   ├── docker/        # Docker files
-│   ├── migrations/    # Alembic migrations
-│   ├── scripts/       # Startup and initialization scripts
-│   └── tests/         # Pytest suite
+│   ├── docker/                    # Docker files
+│   ├── migrations/                # Alembic migrations
+│   ├── scripts/                   # Startup and initialization scripts
+│   └── tests/                     # Pytest suite
 ├── docker-compose.yaml
 ├── docker-compose.test.yaml
 ├── Makefile
