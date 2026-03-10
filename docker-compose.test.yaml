@@ -7,4 +7,3 @@ services:
     restart: "no"
     environment:
       - ENVIRONMENT=testing
-      - DB_VOLUME=app-db-test
