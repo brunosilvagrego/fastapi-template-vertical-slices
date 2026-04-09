@@ -5,6 +5,7 @@ from fastapi import APIRouter, FastAPI
 
 from app.auth.router import router as router_auth
 from app.core.logging_config import setup_logging
+from app.core.middleware import RequestLoggingMiddleware
 from app.health.router import router as router_health
 from app.items.router import router as router_items
 from app.users.router import router as router_users
@@ -27,21 +28,23 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="<Service Name> API", lifespan=lifespan)
+app.add_middleware(RequestLoggingMiddleware)
 
+# Base router objects
 router = APIRouter()
+api_router = APIRouter(prefix="/api/v1")
 
 
+# Root routers
 @router.get("/")
 def root():
     logger.info("Serving root endpoint.")
     return {"message": "Hello World"}
 
 
-# Root routers
 router.include_router(router_health)
 
 # API routers
-api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(router_auth)
 api_router.include_router(router_users_admin)
 api_router.include_router(router_users)
