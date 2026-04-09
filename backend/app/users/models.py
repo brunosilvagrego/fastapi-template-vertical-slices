@@ -5,21 +5,21 @@ from sqlalchemy import DateTime
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base
+from app.core.utils import now_utc
 from app.users.schemas import UserRead, UserSchema
 
 
 class User(Base):
-    """Pluralized table name to avoid conflict with PostgreSQL default user
-    table.
-    """
-
     __tablename__ = "users"
 
     uid: Mapped[str] = mapped_column(primary_key=True, default=shortuuid.uuid)
     full_name: Mapped[str] = mapped_column(index=True)
     email: Mapped[str] = mapped_column(index=True, unique=True)
     hashed_password: Mapped[str]
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=now_utc,
+    )
     deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,

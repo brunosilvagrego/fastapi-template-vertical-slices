@@ -1,8 +1,8 @@
 """Add items table
 
-Revision ID: 56752a35789e
-Revises: 219c69f50645
-Create Date: 2026-02-28 01:10:08.448674
+Revision ID: e568be01a144
+Revises: 5a919dec6e83
+Create Date: 2026-04-09 14:20:23.550959
 
 """
 
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "56752a35789e"
-down_revision: str | Sequence[str] | None = "219c69f50645"
+revision: str = "e568be01a144"
+down_revision: str | Sequence[str] | None = "5a919dec6e83"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -21,23 +21,20 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     """Upgrade schema."""
     op.create_table(
-        "item",
-        sa.Column("id", sa.Integer(), nullable=False),
+        "items",
+        sa.Column("id", sa.BigInteger(), nullable=False),
         sa.Column("title", sa.String(), nullable=False),
         sa.Column("description", sa.String(), nullable=False),
         sa.Column("owner_uid", sa.String(), nullable=False),
         sa.ForeignKeyConstraint(
             ["owner_uid"],
             ["users.uid"],
-            name=op.f("fk_item_owner_uid_users"),
+            name=op.f("fk_items_owner_uid_users"),
         ),
-        sa.PrimaryKeyConstraint("id", name=op.f("pk_item")),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_items")),
     )
-
-    op.create_index(op.f("ix_item_id"), "item", ["id"], unique=True)
 
 
 def downgrade() -> None:
     """Downgrade schema."""
-    op.drop_index(op.f("ix_item_id"), table_name="item")
-    op.drop_table("item")
+    op.drop_table("items")
