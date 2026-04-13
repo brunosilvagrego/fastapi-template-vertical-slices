@@ -13,3 +13,5 @@ API_AUTH_ENDPOINT = "/api/v1/auth/token"
 
 PASSWORD_MIN_LENGTH = 16
 PASSWORD_MAX_LENGTH = 32
+
+ENTITY_CREATION_ERROR = "Error while creating %s with schema: %s. Exception: %s"

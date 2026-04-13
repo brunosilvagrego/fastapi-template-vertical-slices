@@ -1,6 +1,7 @@
 import logging
+from dataclasses import dataclass
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from jwt.exceptions import ExpiredSignatureError, PyJWTError
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,10 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.schemas import TokenData
 from app.core.database import SessionManager
 from app.core.security import decode_access_token, oauth2_scheme
-from app.items import service as service_items
 from app.items.models import Item
-from app.users import service as service_users
+from app.items.service import service_item
 from app.users.models import User
+from app.users.service import service_user
 
 logger = logging.getLogger(__name__)
 
@@ -19,13 +20,34 @@ EXPIRED_JWT = "Expired JWT"
 INVALID_JWT = "Invalid JWT"
 
 
+@dataclass
+class PaginationParams:
+    page: int
+    per_page: int
+
+
+def paginate(default_per_page: int = 50):
+    def _pagination(
+        page: int = Query(
+            1,
+            ge=1,
+            description="Page number, starting from 1",
+        ),
+        per_page: int = Query(
+            default_per_page,
+            ge=1,
+            le=50,
+            description="Number of results per page",
+        ),
+    ) -> PaginationParams:
+        return PaginationParams(page=page, per_page=per_page)
+
+    return _pagination
+
+
 async def get_db_session():
     async with SessionManager() as db_session:
         yield db_session
-
-
-def raise_unauthorized(detail: str):
-    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
 
 
 def check_user(user: User | None) -> User:
@@ -48,10 +70,10 @@ def get_token_data(token: str = Depends(oauth2_scheme)) -> TokenData:
     try:
         token_data = decode_access_token(token)
     except ExpiredSignatureError:
-        raise_unauthorized(EXPIRED_JWT)
+        service_user.raise_unauthorized(EXPIRED_JWT)
     except (PyJWTError, ValidationError) as e:
         logger.warning(f"Invalid JWT: {e}")
-        raise_unauthorized(INVALID_JWT)
+        service_user.raise_unauthorized(INVALID_JWT)
 
     return token_data
 
@@ -60,11 +82,11 @@ async def get_current_user(
     token: TokenData = Depends(get_token_data),
     db_session: AsyncSession = Depends(get_db_session),
 ) -> User:
-    if token.uid is None:
-        logger.warning("Token does not contain uid")
-        raise_unauthorized(INVALID_JWT)
+    if token.user_uid is None:
+        logger.warning("Token does not contain user_uid")
+        service_user.raise_unauthorized(INVALID_JWT)
 
-    user = check_user(await service_users.get(db_session, token.uid))
+    user = check_user(await service_user.get(db_session, uid=token.user_uid))
 
     return user
 
@@ -85,7 +107,7 @@ async def get_user_by_uid(
     uid: str,
     db_session: AsyncSession = Depends(get_db_session),
 ) -> User:
-    user = check_user(await service_users.get(db_session, uid))
+    user = check_user(await service_user.get(db_session, uid=uid))
     return user
 
 
@@ -94,7 +116,7 @@ async def get_item_by_id(
     user: User = Depends(get_current_user),
     db_session: AsyncSession = Depends(get_db_session),
 ) -> Item:
-    item = await service_items.get(db_session, id, owner_uid=user.uid)
+    item = await service_item.get(db_session, id=id, owner_uid=user.uid)
 
     if item is None:
         raise HTTPException(

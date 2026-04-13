@@ -1,75 +1,139 @@
 from datetime import datetime
-from typing import Annotated, Self
+from typing import Annotated
 
-from pydantic import ConfigDict, EmailStr, Field, model_validator
+from pydantic import ConfigDict, EmailStr, Field
 
 from app.core.consts import PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH
-from app.core.schemas import BaseModel
+from app.core.schemas import BaseModel, NonEmptyModel
+
+UidField = Annotated[
+    str,
+    Field(description="User UID.", examples=["fWE3MZRWk4w2X9vBU2L98a"]),
+]
+
+FullNameField = Annotated[
+    str,
+    Field(description="User's full name.", examples=["John Smith"]),
+]
+
+EmailField = Annotated[
+    EmailStr,
+    Field(
+        description="User's email address.",
+        examples=["john.smith@example.com"],
+    ),
+]
+
+IsAdminField = Annotated[
+    bool,
+    Field(
+        description="Indicates if the user has administrator privileges.",
+        examples=[True, False],
+    ),
+]
+
+CreatedAtField = Annotated[
+    datetime,
+    Field(
+        description="Timestamp of when the user was created.",
+        examples=["2026-01-01T00:00:00Z"],
+    ),
+]
+
+DeletedAtField = Annotated[
+    datetime | None,
+    Field(
+        None,
+        description="Timestamp of when the user was deleted.",
+        examples=["2026-01-01T00:00:00Z", None],
+    ),
+]
 
 PasswordField = Annotated[
     str,
-    Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH),
+    Field(
+        min_length=PASSWORD_MIN_LENGTH,
+        max_length=PASSWORD_MAX_LENGTH,
+        description="User's password.",
+        examples=["secure_password"],
+    ),
+]
+
+UpdatedPasswordField = Annotated[
+    str,
+    Field(
+        min_length=PASSWORD_MIN_LENGTH,
+        max_length=PASSWORD_MAX_LENGTH,
+        description="Updated password of the user.",
+        examples=["updated_secure_password"],
+    ),
+]
+
+HashedPasswordField = Annotated[
+    str,
+    Field(
+        description="Hashed password of the user.",
+        examples=["hashed_secure_password"],
+    ),
 ]
 
 
-class UserSchema(BaseModel):
-    uid: str
-    full_name: str
-    email: EmailStr
-    created_at: datetime
-    deleted_at: datetime | None
-    is_admin: bool
+class UserBase(BaseModel):
+    uid: UidField
+    full_name: FullNameField
+    email: EmailField
+    created_at: CreatedAtField
+    deleted_at: DeletedAtField
+    is_admin: IsAdminField
 
 
-class UserCreate(BaseModel):
+class UserCreateBase(BaseModel):
+    full_name: FullNameField
+    email: EmailField
+    is_admin: IsAdminField = False
+
     model_config = ConfigDict(extra="forbid")
 
-    full_name: str
-    email: EmailStr
+
+class UserCreate(UserCreateBase):
     password: PasswordField
-    is_admin: bool = False
+
+
+class UserCreatePrivate(UserCreateBase):
+    hashed_password: HashedPasswordField
+
+
+class UserReadAdmin(UserBase):
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserRead(BaseModel):
-    full_name: str
-    email: EmailStr
-    joined_at: datetime
+    full_name: FullNameField
+    email: EmailField
+    created_at: CreatedAtField
+
+    model_config = ConfigDict(from_attributes=True)
 
 
-class UserUpdateAdmin(BaseModel):
+class UserUpdatePrivate(NonEmptyModel):
+    full_name: FullNameField | None = None
+    email: EmailField | None = None
+    hashed_password: HashedPasswordField | None = None
+    is_admin: IsAdminField | None = None
+
     model_config = ConfigDict(extra="forbid")
 
-    email: EmailStr | None = None
-    password: PasswordField | None = None
-    is_admin: bool | None = None
 
-    @model_validator(mode="after")
-    def at_least_one_field(self) -> Self:
-        if all(
-            param is None
-            for param in (
-                self.email,
-                self.password,
-                self.is_admin,
-            )
-        ):
-            raise ValueError(
-                "At least one of 'email', 'password' or 'is_admin' must be "
-                "provided."
-            )
-        return self
+class UserUpdateAdmin(NonEmptyModel):
+    email: EmailField | None = None
+    password: UpdatedPasswordField | None = None
+    is_admin: IsAdminField | None = None
 
-
-class UserUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    full_name: str | None = None
-    password: PasswordField | None = None
 
-    @model_validator(mode="after")
-    def at_least_one_field(self) -> Self:
-        if all(param is None for param in (self.full_name, self.password)):
-            raise ValueError(
-                "At least one of 'full_name' or 'password' must be provided."
-            )
-        return self
+class UserUpdate(NonEmptyModel):
+    full_name: FullNameField | None = None
+    password: UpdatedPasswordField | None = None
+
+    model_config = ConfigDict(extra="forbid")

@@ -6,7 +6,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base
 from app.core.utils import now_utc
-from app.users.schemas import UserRead, UserSchema
 
 
 class User(Base):
@@ -29,20 +28,3 @@ class User(Base):
     @property
     def is_active(self) -> bool:
         return self.deleted_at is None
-
-    def schema(self) -> UserSchema:
-        return UserSchema(
-            uid=self.uid,
-            full_name=self.full_name,
-            email=self.email,
-            created_at=self.created_at,
-            deleted_at=self.deleted_at,
-            is_admin=self.is_admin,
-        )
-
-    def schema_read(self) -> UserRead:
-        return UserRead(
-            full_name=self.full_name,
-            email=self.email,
-            joined_at=self.created_at,
-        )

@@ -8,9 +8,9 @@ API_HEALTH_ENDPOINT = "/health"
 
 
 @pytest.mark.anyio
-async def test_health_status(client: AsyncClient) -> None:
+async def test_health_status(http_client: AsyncClient) -> None:
     """Test running database."""
-    response = await client.get(API_HEALTH_ENDPOINT)
+    response = await http_client.get(API_HEALTH_ENDPOINT)
     assert response.status_code == status.HTTP_204_NO_CONTENT
 
 
@@ -25,11 +25,11 @@ async def test_health_status(client: AsyncClient) -> None:
 @patch("app.health.router.db_health_check", new_callable=AsyncMock)
 async def test_health_status_mocked(
     mock_db_health_check: AsyncMock,
-    client: AsyncClient,
+    http_client: AsyncClient,
     db_health: bool,
     expected_status: int,
 ) -> None:
     """Test health status with mocked database health check."""
     mock_db_health_check.return_value = db_health
-    response = await client.get(API_HEALTH_ENDPOINT)
+    response = await http_client.get(API_HEALTH_ENDPOINT)
     assert response.status_code == expected_status

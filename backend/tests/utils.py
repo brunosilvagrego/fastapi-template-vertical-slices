@@ -22,12 +22,12 @@ def get_auth_request_data(email: str, password: str) -> dict[str, str]:
 
 
 async def get_user_token(
-    client: AsyncClient,
+    http_client: AsyncClient,
     email: str,
     password: str,
     expected_status: status = status.HTTP_200_OK,
 ) -> str | None:
-    response = await client.post(
+    response = await http_client.post(
         API_AUTH_ENDPOINT,
         data=get_auth_request_data(email, password),
     )
@@ -44,14 +44,14 @@ def get_auth_header(token: str) -> dict[str, str]:
 
 
 async def make_authenticated_client(
-    client: AsyncClient,
+    http_client: AsyncClient,
     email: str,
     password: str,
 ) -> AsyncClient:
-    token = await get_user_token(client, email, password)
+    token = await get_user_token(http_client, email, password)
     assert token is not None
-    client.headers.update(get_auth_header(token))
-    return client
+    http_client.headers.update(get_auth_header(token))
+    return http_client
 
 
 def get_auth_header_invalid_token() -> dict[str, str]:
@@ -81,19 +81,19 @@ def random_password(
 
 
 async def validate_user_password(
-    client: AsyncClient,
+    http_client: AsyncClient,
     uid: str,
     email: str,
     password: str,
     expected_status: status = status.HTTP_200_OK,
 ) -> None:
-    token = await get_user_token(client, email, password, expected_status)
+    token = await get_user_token(http_client, email, password, expected_status)
 
     if expected_status != status.HTTP_200_OK:
         return
 
     token_data = decode_access_token(token)
-    assert token_data.uid == uid
+    assert token_data.user_uid == uid
 
 
 def is_iso_datetime(value: str) -> bool:

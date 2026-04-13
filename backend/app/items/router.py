@@ -1,18 +1,23 @@
+from collections.abc import Sequence
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import (
+    PaginationParams,
     get_current_user,
     get_db_session,
     get_item_by_id,
+    paginate,
 )
-from app.items import service as service_items
 from app.items.models import Item
 from app.items.schemas import (
     ItemCreate,
-    ItemSchema,
+    ItemRead,
     ItemUpdate,
 )
+from app.items.service import service_item
 from app.users.models import User
 
 router = APIRouter(
@@ -24,58 +29,45 @@ router = APIRouter(
 
 @router.post(
     "",
-    response_model=ItemSchema,
+    response_model=ItemRead,
     status_code=status.HTTP_201_CREATED,
 )
 async def create_item(
-    item_create: ItemCreate,
+    create_schema: ItemCreate,
     user: User = Depends(get_current_user),
     db_session: AsyncSession = Depends(get_db_session),
-) -> ItemSchema:
-    item = await service_items.create(
-        db_session=db_session,
-        title=item_create.title,
-        description=item_create.description,
-        owner_uid=user.uid,
-    )
-
-    return item.schema()
+) -> Item:
+    return await service_item.new(db_session, user, create_schema)
 
 
-@router.get("", response_model=list[ItemSchema])
+@router.get("", response_model=list[ItemRead])
 async def list_items(
+    pagination: Annotated[PaginationParams, Depends(paginate())],
     user: User = Depends(get_current_user),
     db_session: AsyncSession = Depends(get_db_session),
-) -> list[ItemSchema]:
-    items = await service_items.get_all(
-        db_session=db_session,
+) -> Sequence[Item]:
+    return await service_item.get_multi(
+        db_session,
+        page=pagination.page,
+        per_page=pagination.per_page,
         owner_uid=user.uid,
     )
 
-    return [item.schema() for item in items]
 
-
-@router.get("/{id}", response_model=ItemSchema)
+@router.get("/{id}", response_model=ItemRead)
 async def get_item(
     item: Item = Depends(get_item_by_id),
-) -> ItemSchema:
-    return item.schema()
+) -> Item:
+    return item
 
 
-@router.patch("/{id}", response_model=ItemSchema)
+@router.patch("/{id}", response_model=ItemRead)
 async def update_item(
-    item_update: ItemUpdate,
+    update_schema: ItemUpdate,
     item: Item = Depends(get_item_by_id),
     db_session: AsyncSession = Depends(get_db_session),
-) -> ItemSchema:
-    updated_item = await service_items.update(
-        db_session=db_session,
-        item=item,
-        title=item_update.title,
-        description=item_update.description,
-    )
-
-    return updated_item.schema()
+) -> Item | None:
+    return await service_item.update_check(db_session, item, update_schema)
 
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -83,4 +75,4 @@ async def delete_item(
     item: Item = Depends(get_item_by_id),
     db_session: AsyncSession = Depends(get_db_session),
 ) -> None:
-    await service_items.delete(db_session, item)
+    await service_item.delete_check(db_session, item)
