@@ -7,8 +7,12 @@ from app.core.config import settings
 from app.core.consts import API_AUTH_ENDPOINT, PASSWORD_MIN_LENGTH
 from app.core.security import decode_access_token
 from app.core.utils import now_utc
+from app.users.models import User
+from app.users.schemas import UserCreate
+from app.users.service import service_user
 from fastapi import status
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 PASSWORD_CHARACTERS = string.ascii_letters + string.digits
 
@@ -102,3 +106,23 @@ def is_iso_datetime(value: str) -> bool:
         return True
     except ValueError:
         return False
+
+
+async def new_user(
+    db_session: AsyncSession,
+    full_name: str = "Test User",
+    email: str = "user@example.com",
+    password: str = random_password(),
+    is_admin: bool = False,
+) -> User:
+    db_user = await service_user.new(
+        db_session,
+        create_schema=UserCreate(
+            full_name=full_name,
+            email=email,
+            password=password,
+            is_admin=is_admin,
+        ),
+    )
+    assert db_user is not None
+    return db_user

@@ -13,7 +13,11 @@ UidField = Annotated[
 
 FullNameField = Annotated[
     str,
-    Field(description="User's full name.", examples=["John Smith"]),
+    Field(
+        min_length=1,
+        description="User's full name.",
+        examples=["John Smith"],
+    ),
 ]
 
 EmailField = Annotated[

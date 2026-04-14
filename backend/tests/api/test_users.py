@@ -1,24 +1,25 @@
 import pytest
 from app.core.config import settings
 from app.core.consts import PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH
+from app.users.models import User
+from app.users.service import service_user
 from fastapi import status
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.utils import (
-    get_auth_header_expired_token,
-    get_auth_header_invalid_token,
-    is_iso_datetime,
-    make_authenticated_client,
-    random_password,
-    validate_user_password,
-)
+from tests import utils
 
 API_ADMIN_USERS_ENDPOINT = "/api/v1/admin/users"
 API_ADMIN_USERS_UID_ENDPOINT = "/api/v1/admin/users/{uid}"
 API_USERS_ENDPOINT = "/api/v1/users/me"
 SELF_UID = "me"
 NONEXISTENT_USER_UID = "xyz"
+USER_FULL_NAME = "Test User"
+VALID_EMAIL = "user@example.com"
 INVALID_EMAIL = "invalid_email"
+VALID_PASSWORD = utils.random_password()
+INVALID_PASSWORD_MIN = utils.random_password(PASSWORD_MIN_LENGTH - 1)
+INVALID_PASSWORD_MAX = utils.random_password(PASSWORD_MAX_LENGTH + 1)
 
 
 async def check_admin_endpoints_access(
@@ -50,53 +51,85 @@ async def check_user_endpoints_access(
         assert response.status_code == expected_status
 
 
-def check_user_data(
+async def check_user_data(
+    db_session: AsyncSession,
     user_data: dict,
-    expected_full_name: str | None = None,
-    expected_email: str | None = None,
+    expected_full_name: str,
+    expected_email: str,
     expected_is_admin: bool | None = None,
+    deleted: bool = False,
     self_data: bool = False,
 ) -> None:
     assert isinstance(user_data, dict)
-    assert isinstance(user_data.get("full_name"), str)
-    assert isinstance(user_data.get("email"), str)
 
-    if self_data is True:
-        created_at = user_data.get("created_at")
-    else:
-        assert isinstance(user_data.get("uid"), str)
-        assert isinstance(user_data.get("is_admin"), bool)
-        assert "deleted_at" in user_data
-        assert user_data.get("deleted_at") is None
-        created_at = user_data.get("created_at")
+    full_name = user_data.get("full_name")
+    assert isinstance(full_name, str)
+    assert full_name == expected_full_name
 
+    email = user_data.get("email")
+    assert isinstance(email, str)
+    assert email == expected_email
+
+    created_at = user_data.get("created_at")
     assert isinstance(created_at, str)
-    assert is_iso_datetime(created_at)
+    assert utils.is_iso_datetime(created_at)
 
-    if expected_full_name is not None:
-        assert user_data["full_name"] == expected_full_name
+    if self_data:
+        return
 
-    if expected_email is not None:
-        assert user_data["email"] == expected_email
+    uid = user_data.get("uid")
+    assert isinstance(uid, str)
 
-    if expected_is_admin is not None:
-        assert user_data["is_admin"] == expected_is_admin
+    is_admin = user_data.get("is_admin")
+    assert isinstance(is_admin, bool)
+    assert is_admin == expected_is_admin
+
+    assert "deleted_at" in user_data
+    deleted_at = user_data.get("deleted_at")
+
+    if deleted:
+        assert isinstance(deleted_at, str)
+        assert utils.is_iso_datetime(deleted_at)
+    else:
+        assert deleted_at is None
+
+    db_user = await service_user.get(db_session, uid=uid)
+    assert db_user.full_name == expected_full_name
+    assert db_user.email == expected_email
+    assert db_user.is_admin == expected_is_admin
 
 
-async def create_new_user(
+async def check_users_list(
+    db_session: AsyncSession,
+    users_data: list[dict],
+    expected_users: list[User],
+) -> None:
+    assert isinstance(users_data, list)
+    assert len(users_data) == len(expected_users)
+
+    for user_data, expected_user in zip(
+        users_data,
+        expected_users,
+        strict=True,
+    ):
+        await check_user_data(
+            db_session,
+            user_data,
+            expected_user.full_name,
+            expected_user.email,
+            expected_user.is_admin,
+            deleted=True if expected_user.deleted_at is not None else False,
+        )
+
+
+async def create_user(
     http_client: AsyncClient,
-    full_name: str,
-    email: str | None = None,
-    password: str | None = None,
-    is_admin: bool = False,
+    full_name: str | None,
+    email: str | None,
+    password: str | None,
+    is_admin: bool | None,
     expected_status: status = status.HTTP_201_CREATED,
 ) -> dict | None:
-    if email is None:
-        email = f"{full_name.lower().replace(' ', '')}@example.com"
-
-    if password is None:
-        password = random_password()
-
     response = await http_client.post(
         API_ADMIN_USERS_ENDPOINT,
         json={
@@ -112,22 +145,6 @@ async def create_new_user(
         return None
 
     return response.json()
-
-
-async def get_all_users(
-    http_client: AsyncClient,
-    expected_status: status = status.HTTP_200_OK,
-) -> dict | None:
-    response = await http_client.get(API_ADMIN_USERS_ENDPOINT)
-    assert response.status_code == expected_status
-
-    if expected_status != status.HTTP_200_OK:
-        return None
-
-    data = response.json()
-    assert isinstance(data, list)
-
-    return data
 
 
 def get_user_url(uid: str):
@@ -215,7 +232,7 @@ async def test_users_endpoints_invalid_token(http_client: AsyncClient) -> None:
     ):
         await check_access_function(
             http_client,
-            headers=get_auth_header_invalid_token(),
+            headers=utils.get_auth_header_invalid_token(),
             expected_status=status.HTTP_401_UNAUTHORIZED,
         )
 
@@ -228,7 +245,7 @@ async def test_users_endpoints_expired_token(http_client: AsyncClient) -> None:
     ):
         await check_access_function(
             http_client,
-            headers=get_auth_header_expired_token(),
+            headers=utils.get_auth_header_expired_token(),
             expected_status=status.HTTP_401_UNAUTHORIZED,
         )
 
@@ -245,260 +262,388 @@ async def test_users_endpoints_external_access(
 
 
 @pytest.mark.anyio
-async def test_admin_get_users(http_client_admin: AsyncClient) -> None:
-    data = await get_all_users(http_client_admin)
-    assert len(data) > 0
-
-    for user_data in data:
-        check_user_data(user_data)
-
-
-@pytest.mark.anyio
-async def test_admin_get_user_by_id(http_client_admin: AsyncClient) -> None:
-    data = await get_all_users(http_client_admin)
-
-    test_uids = [user_data["uid"] for user_data in data]
-    assert len(test_uids) > 0
-
-    test_uids.append(NONEXISTENT_USER_UID)
-
-    for uid in test_uids:
-        expected_status = (
-            status.HTTP_404_NOT_FOUND
-            if uid == NONEXISTENT_USER_UID
-            else status.HTTP_200_OK
-        )
-
-        user_data = await get_user(
-            http_client_admin,
-            uid=uid,
-            expected_status=expected_status,
-        )
-
-        if expected_status == status.HTTP_200_OK:
-            check_user_data(user_data)
-
-
-@pytest.mark.anyio
-async def test_admin_create_users(http_client_admin: AsyncClient) -> None:
-    for i in range(2):
-        full_name = f"Test User {i}"
-        email = f"test_user_{i}@example.com"
-        is_admin = True if i % 2 == 0 else False
-
-        new_user = await create_new_user(
-            http_client_admin,
-            full_name=full_name,
-            email=email,
-            is_admin=is_admin,
-        )
-        check_user_data(new_user, full_name, email, is_admin)
-
-        user_data = await get_user(http_client_admin, new_user["uid"])
-        check_user_data(user_data, full_name, email, is_admin)
-
-    # Try to create a user with a mal-formatted email
-    await create_new_user(
+@pytest.mark.parametrize(
+    "full_name,email,password,is_admin,expected_status",
+    [
+        (
+            USER_FULL_NAME,
+            VALID_EMAIL,
+            VALID_PASSWORD,
+            True,
+            status.HTTP_201_CREATED,
+        ),
+        (
+            USER_FULL_NAME,
+            VALID_EMAIL,
+            VALID_PASSWORD,
+            False,
+            status.HTTP_201_CREATED,
+        ),
+        (
+            "",
+            VALID_EMAIL,
+            VALID_PASSWORD,
+            True,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ),
+        (
+            None,
+            VALID_EMAIL,
+            VALID_PASSWORD,
+            False,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ),
+        (
+            5,
+            VALID_EMAIL,
+            VALID_PASSWORD,
+            True,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ),
+        (
+            USER_FULL_NAME,
+            INVALID_EMAIL,
+            VALID_PASSWORD,
+            False,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ),
+        (
+            USER_FULL_NAME,
+            None,
+            VALID_PASSWORD,
+            True,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ),
+        (
+            USER_FULL_NAME,
+            5,
+            VALID_PASSWORD,
+            False,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ),
+        (
+            USER_FULL_NAME,
+            VALID_EMAIL,
+            INVALID_PASSWORD_MIN,
+            True,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ),
+        (
+            USER_FULL_NAME,
+            VALID_EMAIL,
+            INVALID_PASSWORD_MAX,
+            True,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ),
+        (
+            USER_FULL_NAME,
+            VALID_EMAIL,
+            None,
+            False,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ),
+        (
+            USER_FULL_NAME,
+            VALID_EMAIL,
+            5,
+            True,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ),
+        (
+            USER_FULL_NAME,
+            VALID_EMAIL,
+            VALID_PASSWORD,
+            None,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ),
+        (
+            USER_FULL_NAME,
+            VALID_EMAIL,
+            VALID_PASSWORD,
+            5,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ),
+        (None, None, None, None, status.HTTP_422_UNPROCESSABLE_CONTENT),
+    ],
+)
+async def test_admin_create_user(
+    db_session: AsyncSession,
+    http_client_admin: AsyncClient,
+    full_name: str | int | None,
+    email: str | int | None,
+    password: str | int | None,
+    is_admin: bool | int | None,
+    expected_status: status,
+) -> None:
+    user_data = await create_user(
         http_client_admin,
-        full_name="Invalid Email",
-        email=INVALID_EMAIL,
-        expected_status=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        full_name,
+        email,
+        password,
+        is_admin,
+        expected_status,
     )
 
-    # Try to create a user with invalid password lengths
-    for password_length in (PASSWORD_MIN_LENGTH - 1, PASSWORD_MAX_LENGTH + 1):
-        await create_new_user(
+    if expected_status == status.HTTP_201_CREATED:
+        await check_user_data(db_session, user_data, full_name, email, is_admin)
+
+        # Try to create a new user with the same email
+        await create_user(
             http_client_admin,
-            full_name="Invalid Password",
-            password=random_password(length=password_length),
-            expected_status=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            full_name,
+            email,
+            password,
+            is_admin,
+            expected_status=status.HTTP_409_CONFLICT,
         )
 
 
 @pytest.mark.anyio
-async def test_admin_update_user(
-    http_client: AsyncClient,
+async def test_admin_list_users(
+    db_session: AsyncSession,
     http_client_admin: AsyncClient,
 ) -> None:
-    full_name = "Test Update"
-    email = "test_update@example.com"
-    password = random_password()
-    is_admin = False
+    expected_users = []
 
-    new_user = await create_new_user(
-        http_client_admin,
-        full_name=full_name,
-        email=email,
-        password=password,
-        is_admin=is_admin,
-    )
-    check_user_data(new_user, full_name, email, is_admin)
+    for email in (settings.ADMIN_USER_EMAIL, settings.EXTERNAL_USER_EMAIL):
+        user = await service_user.get(db_session, email=email)
+        assert user is not None
+        expected_users.append(user)
 
-    uid = new_user["uid"]
+    response = await http_client_admin.get(API_ADMIN_USERS_ENDPOINT)
+    assert response.status_code == status.HTTP_200_OK
 
-    # Try to update full_name as admin
-    await update_user(
-        http_client_admin,
-        uid=uid,
-        full_name="New Name",
-        expected_status=status.HTTP_422_UNPROCESSABLE_CONTENT,
+    # Check initial users list
+    await check_users_list(
+        db_session,
+        users_data=response.json(),
+        expected_users=expected_users,
     )
 
-    user_data = await get_user(http_client_admin, uid)
-    check_user_data(user_data, full_name, email, is_admin)
+    # Check list after adding a new user
+    new_user = await utils.new_user(db_session)
+    expected_users.append(new_user)
 
-    # Update email
-    new_email = "updated_user@example.com"
+    response = await http_client_admin.get(API_ADMIN_USERS_ENDPOINT)
+    assert response.status_code == status.HTTP_200_OK
 
-    updated_user = await update_user(
-        http_client_admin,
-        uid=uid,
-        email=new_email,
-    )
-    check_user_data(updated_user, full_name, new_email, is_admin)
-
-    user_data = await get_user(http_client_admin, uid)
-    check_user_data(user_data, full_name, new_email, is_admin)
-
-    # Try to update the user with a mal-formatted email
-    await update_user(
-        http_client_admin,
-        uid=uid,
-        email=INVALID_EMAIL,
-        expected_status=status.HTTP_422_UNPROCESSABLE_CONTENT,
+    await check_users_list(
+        db_session,
+        users_data=response.json(),
+        expected_users=expected_users,
     )
 
-    user_data = await get_user(http_client_admin, uid)
-    check_user_data(user_data, full_name, new_email, is_admin)
+    # Check list after deactivating a user
+    await service_user.deactivate(db_session, new_user)
 
-    # Update is_admin
-    for new_is_admin in (True, False):
-        updated_user = await update_user(
-            http_client_admin,
-            uid=uid,
-            is_admin=new_is_admin,
-        )
-        check_user_data(updated_user, full_name, new_email, new_is_admin)
+    response = await http_client_admin.get(API_ADMIN_USERS_ENDPOINT)
+    assert response.status_code == status.HTTP_200_OK
 
-        user_data = await get_user(http_client_admin, uid)
-        check_user_data(user_data, full_name, new_email, new_is_admin)
+    await check_users_list(
+        db_session,
+        users_data=response.json(),
+        expected_users=expected_users[:2],
+    )
+
+    response = await http_client_admin.get(
+        API_ADMIN_USERS_ENDPOINT,
+        params={"active_only": False},
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+    await check_users_list(
+        db_session,
+        users_data=response.json(),
+        expected_users=expected_users,
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "full_name,email,is_admin",
+    [
+        (settings.ADMIN_USER_FULL_NAME, settings.ADMIN_USER_EMAIL, True),
+        (settings.EXTERNAL_USER_FULL_NAME, settings.EXTERNAL_USER_EMAIL, False),
+    ],
+)
+async def test_admin_get_user(
+    db_session: AsyncSession,
+    http_client_admin: AsyncClient,
+    full_name: str,
+    email: str,
+    is_admin: bool,
+) -> None:
+    db_user = await service_user.get(db_session, email=email)
+    user_data = await get_user(http_client_admin, uid=db_user.uid)
+    await check_user_data(db_session, user_data, full_name, email, is_admin)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "new_full_name,new_email,new_password,is_admin,expected_status",
+    [
+        (None, VALID_EMAIL, VALID_PASSWORD, True, status.HTTP_200_OK),
+        (None, VALID_EMAIL, None, None, status.HTTP_200_OK),
+        (None, None, VALID_PASSWORD, None, status.HTTP_200_OK),
+        (None, None, None, True, status.HTTP_200_OK),
+        (None, None, None, False, status.HTTP_200_OK),
+        (
+            None,
+            INVALID_EMAIL,
+            None,
+            None,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ),
+        (None, 5, None, None, status.HTTP_422_UNPROCESSABLE_CONTENT),
+        (
+            None,
+            None,
+            INVALID_PASSWORD_MIN,
+            None,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ),
+        (
+            None,
+            None,
+            INVALID_PASSWORD_MAX,
+            None,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ),
+        (None, None, 5, None, status.HTTP_422_UNPROCESSABLE_CONTENT),
+        (None, None, None, 5, status.HTTP_422_UNPROCESSABLE_CONTENT),
+        (None, None, None, None, status.HTTP_422_UNPROCESSABLE_CONTENT),
+        # Admin cannot update full_name
+        ("New name", None, None, None, status.HTTP_422_UNPROCESSABLE_CONTENT),
+    ],
+)
+async def test_admin_update_user(
+    db_session: AsyncSession,
+    http_client: AsyncClient,
+    http_client_admin: AsyncClient,
+    new_full_name: str | None,
+    new_email: str | int | None,
+    new_password: str | int | None,
+    is_admin: bool | int | None,
+    expected_status: status,
+) -> None:
+    password = utils.random_password()
+
+    db_user = await utils.new_user(db_session, password=password)
 
     # Validate original password
-    await validate_user_password(http_client, uid, new_email, password)
-
-    # Update password
-    new_password = random_password()
-
-    updated_user = await update_user(
-        http_client_admin,
-        uid=uid,
-        password=new_password,
-    )
-    check_user_data(updated_user, full_name, new_email, is_admin)
-
-    await validate_user_password(http_client, uid, new_email, new_password)
-
-    # Check the original password is no longer valid
-    await validate_user_password(
+    await utils.validate_user_password(
         http_client,
-        uid,
-        new_email,
+        db_user.uid,
+        db_user.email,
         password,
-        expected_status=status.HTTP_401_UNAUTHORIZED,
     )
 
-    # Try to update password with invalid lengths
-    for password_length in (PASSWORD_MIN_LENGTH - 1, PASSWORD_MAX_LENGTH + 1):
-        await update_user(
-            http_client_admin,
-            uid=uid,
-            password=random_password(length=password_length),
-            expected_status=status.HTTP_422_UNPROCESSABLE_CONTENT,
+    # Update user
+    updated_data = await update_user(
+        http_client_admin,
+        uid=db_user.uid,
+        full_name=new_full_name,
+        email=new_email,
+        password=new_password,
+        is_admin=is_admin,
+        expected_status=expected_status,
+    )
+
+    if expected_status == status.HTTP_200_OK:
+        await check_user_data(
+            db_session,
+            updated_data,
+            expected_full_name=db_user.full_name,
+            expected_email=new_email or db_user.email,
+            expected_is_admin=is_admin or db_user.is_admin,
         )
 
-    await validate_user_password(http_client, uid, new_email, new_password)
+        if new_password is not None:
+            # Check that original password is no longer valid
+            await utils.validate_user_password(
+                http_client,
+                db_user.uid,
+                db_user.email,
+                password,
+                expected_status=status.HTTP_401_UNAUTHORIZED,
+            )
 
-    # Try to update the user without new values
-    await update_user(
-        http_client_admin,
-        uid=uid,
-        expected_status=status.HTTP_422_UNPROCESSABLE_CONTENT,
-    )
-
-    # Try to update a nonexistent client
-    await update_user(
-        http_client_admin,
-        uid=NONEXISTENT_USER_UID,
-        password=random_password(),
-        expected_status=status.HTTP_404_NOT_FOUND,
-    )
+            # Check that the new password is valid
+            await utils.validate_user_password(
+                http_client,
+                db_user.uid,
+                db_user.email,
+                new_password,
+            )
 
 
 @pytest.mark.anyio
-async def test_admin_delete_user(http_client_admin: AsyncClient) -> None:
-    users_to_delete = []
+@pytest.mark.parametrize("is_admin", [(True), (False)])
+async def test_admin_deactivate_user(
+    db_session: AsyncSession,
+    http_client_admin: AsyncClient,
+    is_admin: bool,
+) -> None:
+    db_user = await utils.new_user(db_session, is_admin=is_admin)
 
-    for i in range(2):
-        full_name = f"To Delete User {i}"
-        is_admin = True if i % 2 == 0 else False
+    await get_user(
+        http_client_admin,
+        uid=db_user.uid,
+        expected_status=status.HTTP_200_OK,
+    )
 
-        new_user = await create_new_user(
-            http_client_admin,
-            full_name=full_name,
-            is_admin=is_admin,
-        )
-        check_user_data(new_user, full_name, expected_is_admin=is_admin)
-
-        user_data = await get_user(http_client_admin, new_user["uid"])
-        check_user_data(user_data, full_name, expected_is_admin=is_admin)
-
-        users_to_delete.append(user_data)
-
-    # Check total users before deletion
-    data = await get_all_users(http_client_admin)
-    total_users = len(data)
-    assert total_users > 0
-
-    # Delete users
-    for user_data in users_to_delete:
-        uid = user_data["uid"]
-
-        await delete_user(
-            http_client_admin,
-            uid=uid,
-            expected_status=status.HTTP_204_NO_CONTENT,
-        )
-
-        await get_user(
-            http_client_admin,
-            uid=uid,
-            expected_status=status.HTTP_400_BAD_REQUEST,
-        )
-
-        await delete_user(
-            http_client_admin,
-            uid=uid,
-            expected_status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    # Check total users after deletion
-    data = await get_all_users(http_client_admin)
-    assert len(data) == total_users - len(users_to_delete)
-
-    # Try to delete a nonexistent client
     await delete_user(
         http_client_admin,
-        uid=NONEXISTENT_USER_UID,
-        expected_status=status.HTTP_404_NOT_FOUND,
+        uid=db_user.uid,
+        expected_status=status.HTTP_204_NO_CONTENT,
+    )
+
+    await get_user(
+        http_client_admin,
+        uid=db_user.uid,
+        expected_status=status.HTTP_400_BAD_REQUEST,
+    )
+
+    await delete_user(
+        http_client_admin,
+        uid=db_user.uid,
+        expected_status=status.HTTP_400_BAD_REQUEST,
     )
 
 
 @pytest.mark.anyio
-async def test_user_get(
+@pytest.mark.parametrize(
+    "uid,expected_status",
+    [
+        (NONEXISTENT_USER_UID, status.HTTP_404_NOT_FOUND),
+    ],
+)
+async def test_admin_endpoints_with_invalid_user_uids(
+    http_client_admin: AsyncClient,
+    uid: str | int,
+    expected_status: status,
+) -> None:
+    await get_user(http_client_admin, uid, expected_status)
+
+    await update_user(
+        http_client_admin,
+        uid,
+        email=VALID_EMAIL,
+        password=VALID_PASSWORD,
+        is_admin=True,
+        expected_status=expected_status,
+    )
+
+    await delete_user(http_client_admin, uid, expected_status)
+
+
+@pytest.mark.anyio
+async def test_get_user(
+    db_session: AsyncSession,
     http_client_admin: AsyncClient,
     http_client_external: AsyncClient,
 ) -> None:
-    for client, full_name, email in (
+    for http_client, full_name, email in (
         (
             http_client_admin,
             settings.ADMIN_USER_FULL_NAME,
@@ -510,102 +655,108 @@ async def test_user_get(
             settings.EXTERNAL_USER_EMAIL,
         ),
     ):
-        user_data = await get_user(client, SELF_UID)
-        check_user_data(user_data, full_name, email, self_data=True)
+        user_data = await get_user(http_client, SELF_UID)
+        await check_user_data(
+            db_session,
+            user_data,
+            full_name,
+            email,
+            self_data=True,
+        )
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    "new_full_name,new_email,new_password,is_admin,expected_status",
+    [
+        (USER_FULL_NAME, None, VALID_PASSWORD, None, status.HTTP_200_OK),
+        (USER_FULL_NAME, None, None, None, status.HTTP_200_OK),
+        (None, None, VALID_PASSWORD, None, status.HTTP_200_OK),
+        (5, None, None, None, status.HTTP_422_UNPROCESSABLE_CONTENT),
+        (
+            None,
+            None,
+            INVALID_PASSWORD_MIN,
+            None,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ),
+        (
+            None,
+            None,
+            INVALID_PASSWORD_MAX,
+            None,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ),
+        (
+            None,
+            None,
+            5,
+            None,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ),
+        (None, None, None, None, status.HTTP_422_UNPROCESSABLE_CONTENT),
+        # Non-admin users cannot update email or is_admin
+        (None, VALID_EMAIL, None, None, status.HTTP_422_UNPROCESSABLE_CONTENT),
+        (None, None, None, True, status.HTTP_422_UNPROCESSABLE_CONTENT),
+    ],
+)
 async def test_update_user(
+    db_session: AsyncSession,
     http_client: AsyncClient,
     http_client_external: AsyncClient,
-    http_client_admin: AsyncClient,
+    new_full_name: str | int | None,
+    new_email: str | None,
+    new_password: str | int | None,
+    is_admin: bool | None,
+    expected_status: status,
 ) -> None:
-    uid = SELF_UID
-    full_name = settings.EXTERNAL_USER_FULL_NAME
-    email = settings.EXTERNAL_USER_EMAIL
-    password = settings.EXTERNAL_USER_PASSWORD
-    original_user = await get_user(http_client_external, uid)
-    check_user_data(original_user, full_name, email, self_data=True)
-
-    # Try to update email and is_admin as regular user
-    for new_email, is_admin in (("test@example.com", None), (None, True)):
-        await update_user(
-            http_client_external,
-            uid=uid,
-            email=new_email,
-            is_admin=is_admin,
-            expected_status=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        )
-
-    user_data = await get_user(http_client_external, uid)
-    check_user_data(user_data, full_name, email, self_data=True)
-
-    # Update full name
-    new_full_name = "Updated Name"
-
-    updated_user = await update_user(
-        http_client_external,
-        uid=uid,
-        full_name=new_full_name,
+    db_user = await service_user.get(
+        db_session,
+        email=settings.EXTERNAL_USER_EMAIL,
     )
-    check_user_data(updated_user, new_full_name, email, self_data=True)
-
-    user_data = await get_user(http_client_external, uid)
-    check_user_data(user_data, new_full_name, email, self_data=True)
 
     # Validate original password
-    data = await get_all_users(http_client_admin)
-    expected_uid = next(
-        (user_data["uid"] for user_data in data if user_data["email"] == email),
-        None,
+    await utils.validate_user_password(
+        http_client,
+        db_user.uid,
+        db_user.email,
+        settings.EXTERNAL_USER_PASSWORD,
     )
 
-    await validate_user_password(http_client, expected_uid, email, password)
-
-    # Update password
-    new_password = random_password()
-
-    updated_user = await update_user(
+    # Update user
+    updated_data = await update_user(
         http_client_external,
-        uid=uid,
+        uid=SELF_UID,
+        full_name=new_full_name,
+        email=new_email,
         password=new_password,
-    )
-    check_user_data(updated_user, new_full_name, email, self_data=True)
-
-    http_client_external = await make_authenticated_client(
-        http_client,
-        email,
-        new_password,
+        is_admin=is_admin,
+        expected_status=expected_status,
     )
 
-    user_data = await get_user(http_client_external, uid)
-    check_user_data(user_data, new_full_name, email, self_data=True)
-
-    await validate_user_password(http_client, expected_uid, email, new_password)
-
-    # Check the original password is no longer valid
-    await validate_user_password(
-        http_client,
-        expected_uid,
-        email,
-        password,
-        expected_status=status.HTTP_401_UNAUTHORIZED,
-    )
-
-    # Try to update password with invalid lengths
-    for password_length in (PASSWORD_MIN_LENGTH - 1, PASSWORD_MAX_LENGTH + 1):
-        await update_user(
-            http_client_external,
-            uid=uid,
-            password=random_password(length=password_length),
-            expected_status=status.HTTP_422_UNPROCESSABLE_CONTENT,
+    if expected_status == status.HTTP_200_OK:
+        await check_user_data(
+            db_session,
+            updated_data,
+            expected_full_name=new_full_name or db_user.full_name,
+            expected_email=db_user.email,
+            self_data=True,
         )
 
-    await validate_user_password(http_client, expected_uid, email, new_password)
+        if new_password is not None:
+            # Check that original password is no longer valid
+            await utils.validate_user_password(
+                http_client,
+                db_user.uid,
+                db_user.email,
+                password=settings.EXTERNAL_USER_PASSWORD,
+                expected_status=status.HTTP_401_UNAUTHORIZED,
+            )
 
-    # Try to update the user without new values
-    await update_user(
-        http_client_external,
-        uid=uid,
-        expected_status=status.HTTP_422_UNPROCESSABLE_CONTENT,
-    )
+            # Check that the new password is valid
+            await utils.validate_user_password(
+                http_client,
+                db_user.uid,
+                db_user.email,
+                password=new_password,
+            )
