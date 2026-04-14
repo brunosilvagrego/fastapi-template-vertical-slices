@@ -7,6 +7,9 @@ from app.core.config import settings
 from app.core.consts import API_AUTH_ENDPOINT, PASSWORD_MIN_LENGTH
 from app.core.security import decode_access_token
 from app.core.utils import now_utc
+from app.items.models import Item
+from app.items.schemas import ItemCreate
+from app.items.service import service_item
 from app.users.models import User
 from app.users.schemas import UserCreate
 from app.users.service import service_user
@@ -14,6 +17,7 @@ from fastapi import status
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+NONEXISTENT_ID = 999_999_999
 PASSWORD_CHARACTERS = string.ascii_letters + string.digits
 
 
@@ -126,3 +130,44 @@ async def new_user(
     )
     assert db_user is not None
     return db_user
+
+
+async def create_item(
+    db_session,
+    user: User | None = None,
+    user_email: str | None = None,
+    title: str = "Item 1",
+    description: str = "Description 1",
+) -> Item:
+    if user is None:
+        user = await service_user.get(db_session, email=user_email)
+
+    return await service_item.new(
+        db_session,
+        user=user,
+        create_schema=ItemCreate(
+            title=title,
+            description=description,
+        ),
+    )
+
+
+async def create_items(
+    db_session,
+    user: User | None = None,
+    user_email: str | None = None,
+    count: int = 5,
+) -> list[Item]:
+    db_items: list[Item] = []
+
+    for i in range(count):
+        db_item = await create_item(
+            db_session,
+            user=user,
+            user_email=user_email,
+            title=f"Item {i}",
+            description=f"Description {i}",
+        )
+        db_items.append(db_item)
+
+    return db_items
