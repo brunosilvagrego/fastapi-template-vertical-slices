@@ -32,13 +32,13 @@ class ItemService(CRUDBase[Item, ItemCreatePrivate, ItemUpdate]):
 
         Args:
             db_session: The active async database session.
-            user: The authenticated :class:`~app.models.users.User`
+            user: The authenticated :class:`~app.users.models.User`
                 whose ``id`` will be set as the item's ``owner_id``.
             create_schema: Public-facing creation payload containing the item
                 ``title`` and ``description``.
 
         Returns:
-            The newly created :class:`~app.models.items.Item` ORM instance.
+            The newly created :class:`~app.items.models.Item` ORM instance.
         """
         return await self.create(
             db_session,
@@ -62,12 +62,12 @@ class ItemService(CRUDBase[Item, ItemCreatePrivate, ItemUpdate]):
 
         Args:
             db_session: The active async database session.
-            item: The :class:`~app.models.items.Item` ORM instance to update.
+            item: The :class:`~app.items.models.Item` ORM instance to update.
             update_schema: Update payload; at least one field must be set
                 (enforced by :class:`~app.schemas.base.NonEmptyModel`).
 
         Returns:
-            The updated :class:`~app.models.items.Item` ORM instance.
+            The updated :class:`~app.items.models.Item` ORM instance.
 
         Raises:
             HTTPException: ``500 Internal Server Error`` if the underlying
@@ -100,7 +100,7 @@ class ItemService(CRUDBase[Item, ItemCreatePrivate, ItemUpdate]):
 
         Args:
             db_session: The active async database session.
-            item: The :class:`~app.models.items.Item` ORM instance to delete.
+            item: The :class:`~app.items.models.Item` ORM instance to delete.
         Returns:
             None
         Raises:
